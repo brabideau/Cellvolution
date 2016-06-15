@@ -19,17 +19,24 @@ class cell
 };
 
 // global variables 
-std::vector<cell> flock;
 
 float size = 20; //average size
 float speed = .00025;
 float maxspeed = 1;
 float growth = .001;
-int starting_number = 1;
+int start_population = 5;
+int max_population = 100;
 float drift = .01;
 
+int width = 1100;
+int height = 700;
 
-void init_cell(double x, double y, float &speed, float &size) {
+std::vector<cell> flock;
+std::vector<cell> litter;
+//std::flock.reserve(100);
+
+
+cell cell_new(double x, double y, float &speed, float &size) {
 
 	std::random_device engine;
 	auto uniform = std::uniform_real_distribution<float>(0, 1);
@@ -50,7 +57,7 @@ void init_cell(double x, double y, float &speed, float &size) {
 	c.offspring = intgen(engine);
 	c.o_size = .25 * c.max_size * uniform(engine);
 
-	flock.push_back(c);
+	return c;
 }
 
 cell cell_split(cell& c){
@@ -87,19 +94,17 @@ void on_mouse_button(GLFWwindow * win, int button, int action, int mods)
 		glfwGetCursorPos(win, &x, &y);
 
 		// flock.push_back({ (float)x, (float)y, 0, 0, 30 });
-		init_cell(x, y, speed, size);
+		cell_new(x, y, speed, size);
 	}
 }
 
 
 int main()
 {
-	int width, height;
-	width = 1100;
-	height = 700;
+
 
 	glfwInit();
-	GLFWwindow * win = glfwCreateWindow(width, height, "OpenGL example program", nullptr, nullptr);
+	GLFWwindow * win = glfwCreateWindow(width, height, "Cellvolution", nullptr, nullptr);
 
 	// glfwGetFramebufferSize(win, &width, &height);
 
@@ -107,9 +112,10 @@ int main()
 	auto init_pos = std::uniform_real_distribution<float>(0, 1);
 
 	// generate all the initial cells
-	for (int i = 0; i < starting_number; i++)
+	for (int i = 0; i < start_population; i++)
 	{
-		init_cell(width * init_pos(pos_engine), height * init_pos(pos_engine), speed, size);
+		flock.push_back(cell_new(width * init_pos(pos_engine), height * init_pos(pos_engine), speed, size));
+
 	}
 
 	glfwMakeContextCurrent(win);
@@ -118,7 +124,8 @@ int main()
 	glfwSetMouseButtonCallback(win, on_mouse_button);
 
 	double t0 = glfwGetTime();
-	while (!glfwWindowShouldClose(win)) // The actual animatoin starts
+
+	while (!glfwWindowShouldClose(win)) // The actual animation starts
 	{
 		// Handle input
 		glfwPollEvents();
@@ -127,6 +134,15 @@ int main()
 		double t1 = glfwGetTime();
 		float timestep = (float)(t1 - t0);
 		t0 = t1;
+
+		// Make the window
+		glfwMakeContextCurrent(win);
+
+		glClearColor(.05, .1, .3, 1);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		glLoadIdentity();
+		glOrtho(0, width, height, 0, -1, +1);
 
 		// Update cell stats
 		for (auto & c : flock)
@@ -155,12 +171,22 @@ int main()
 
 				factor = 3.14159 / 4 - factor;
 
-				c.dir_x += speed * factor * (target.x - c.x) / dist;
-				c.dir_y += speed * factor * (target.y - c.y) / dist;
+				c.dir_x += factor * (target.x - c.x) / dist;
+				c.dir_y += factor * (target.y - c.y) / dist;
 			}
 
-			c.x += c.dir_x;
-			c.y += c.dir_y;
+			c.x += c.dir_x * timestep; 
+			c.y += c.dir_y * timestep;
+
+
+			// Wrap on edge of screen
+			//if (c.x > width || c.x < 0) {
+			//	c.x -= width * abs(c.x) / c.x;
+			//}
+
+			//if (c.y > height || c.y < 0) {
+			//	c.y -= height * abs(c.y) / c.y;
+			//}
 
 			if (c.x > width) { c.x -= width; }
 			if (c.x < 0) { c.x += width; }
@@ -169,54 +195,52 @@ int main()
 			if (c.y < 0) { c.y += height; }
 
 
-			std::vector<cell> litter;
 			// Gives birth
+
 			if (c.health >= c.max_size * 1.99) {
+				float total_size = 0;
 				for (int i = 0; i < c.offspring; i++)
 				{
-					litter.push_back(cell_split(c));
+					cell o = cell_split(c);
+					litter.push_back(o);
+					total_size += o.size;
 				}
+
+				c.health -= total_size;
 			}
 
-			for (auto & o : litter) {
-				flock.push_back(o);
-			}
 
-		}
-
-
-		// Draw some stuff
-		glfwMakeContextCurrent(win);
-
-		glClearColor(.05, .1, .3, 1);
-		glClear(GL_COLOR_BUFFER_BIT);
-
-		glLoadIdentity();
-		glOrtho(0, width, height, 0, -1, +1);
-
-
-		for (cell b : flock)
-		{
-			float hue = b.hue;
+			// Draw the cell
+			float hue = c.hue;
 
 			glBegin(GL_POLYGON);
 			glColor3f(abs(sin(hue)), abs(sin(hue + 1)), abs(sin(hue + 2)));
-			glVertex2f(b.x + b.size, b.y + b.size);
-			glVertex2f(b.x + b.size, b.y - b.size);
-			glVertex2f(b.x - b.size, b.y - b.size);
-			glVertex2f(b.x - b.size, b.y + b.size);
+			glVertex2f(c.x + c.size, c.y + c.size);
+			glVertex2f(c.x + c.size, c.y - c.size);
+			glVertex2f(c.x - c.size, c.y - c.size);
+			glVertex2f(c.x - c.size, c.y + c.size);
 			glEnd();
 		}
 
-
-
 		glfwSwapBuffers(win);
+
+
+		for (auto & o : litter) {
+			cell new_cell{ o.x, o.y, o.dir_x, o.dir_y, o.size, o.max_size, o.health, o.metabolism, o.hue, o.offspring, o.o_size };
+
+			flock.push_back(new_cell);
+		}
+
+		litter.clear();
+	}
+
+
+		
 
 
 		glfwDestroyWindow(win);
 		glfwTerminate();
 		return 0;
 
-	}
-} // end main
+	} // end main
 
