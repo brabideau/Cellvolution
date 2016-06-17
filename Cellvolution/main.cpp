@@ -1,6 +1,7 @@
 #include <cmath>
 #include <vector>
 #include <random>
+#include <algorithm>
 
 #include <GLFW/glfw3.h>
 #pragma comment(lib, "opengl32.lib")
@@ -21,12 +22,12 @@ class cell
 // global variables 
 
 float size = 20; //average size
-float speed = .00025;
-float maxspeed = 1;
+float speed = 5;
+double maxspeed = .001;
 float growth = .001;
 int start_population = 5;
 int max_population = 100;
-float drift = .01;
+float drift = .03;
 
 int width = 1100;
 int height = 700;
@@ -47,15 +48,15 @@ cell cell_new(double x, double y, float &speed, float &size) {
 
 	c.x = x;
 	c.y = y;
-	c.dir_x = .25 * normal(engine);
-	c.dir_y = .25 * normal(engine);
+	c.dir_x = speed * normal(engine);
+	c.dir_y = speed * normal(engine);
 	c.size = abs(size + size * normal(engine) / 4 );
 	c.max_size = c.size + size * abs(normal(engine));
 	c.metabolism = growth + growth * uniform(engine);
 	c.health = c.size * 2;
 	c.hue = 3.14159 * uniform(engine); 
 	c.offspring = intgen(engine);
-	c.o_size = .25 * c.max_size * uniform(engine);
+	c.o_size = c.max_size * (uniform(engine)+1) *.125;
 
 	return c;
 }
@@ -69,8 +70,8 @@ cell cell_split(cell& c){
 
 	cell o;
 
-	o.x = c.x;
-	o.y = c.y;
+	o.x = c.x + c.size * normal(engine);
+	o.y = c.y + c.size * normal(engine);
 	o.dir_x = .25 * normal(engine);
 	o.dir_y = .25 * normal(engine);
 	o.size = c.o_size * (1 + drift * normal(engine));
@@ -85,7 +86,6 @@ cell cell_split(cell& c){
 }
 
 
-
 void on_mouse_button(GLFWwindow * win, int button, int action, int mods)
 {
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
@@ -93,15 +93,14 @@ void on_mouse_button(GLFWwindow * win, int button, int action, int mods)
 		double x, y;
 		glfwGetCursorPos(win, &x, &y);
 
-		// flock.push_back({ (float)x, (float)y, 0, 0, 30 });
-		cell_new(x, y, speed, size);
+		flock.push_back(cell_new(x, y, speed, size));
+		
 	}
 }
 
 
 int main()
 {
-
 
 	glfwInit();
 	GLFWwindow * win = glfwCreateWindow(width, height, "Cellvolution", nullptr, nullptr);
@@ -132,7 +131,7 @@ int main()
 
 		// Compute timestep
 		double t1 = glfwGetTime();
-		float timestep = (float)(t1 - t0);
+		float timestep = (float)((t1 - t0)/8);
 		t0 = t1;
 
 		// Make the window
@@ -164,6 +163,8 @@ int main()
 
 				float dist = sqrt(pow(target.x - c.x, 2) + pow(target.y - c.y, 2));
 
+				if (dist == 0) continue;
+
 				float factor = abs(c.hue - target.hue);
 				if (factor > 3.14159 / 2) {
 					factor = (3.14159 / 2) - factor;
@@ -172,7 +173,9 @@ int main()
 				factor = 3.14159 / 4 - factor;
 
 				c.dir_x += factor * (target.x - c.x) / dist;
+				//c.dir_x = std::min(c.dir_x, maxspeed);
 				c.dir_y += factor * (target.y - c.y) / dist;
+			//	c.dir_y = std::min(c.dir_y, maxspeed);
 			}
 
 			c.x += c.dir_x * timestep; 
